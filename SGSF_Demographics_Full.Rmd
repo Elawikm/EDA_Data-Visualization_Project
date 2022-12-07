@@ -1,0 +1,862 @@
+---
+title: "SGSF Demographic Data"
+author: "Marwa El Awik"
+date: '2022-10-29'
+output: 
+  html_document: 
+    fig_width: 8
+    fig_height: 5
+    code_folding: hide
+---
+<style type="text/css">
+ body{font-size:11pt;
+ }
+</style>
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+```{r packages, message=FALSE,echo=TRUE}
+library(tidyverse)
+library(RColorBrewer)
+library(plotly)
+library(plyr)
+library(gt)
+library(stringr)
+library(stringi)
+library(mapquestr)
+library(leaflet)
+remotes::install_github("chiouey/mapquestr")
+```
+#### <B> About Dataset</B>
+
+<div> The dataset refers to 18 SUPERGirls of SGSF Foundation. It includes data collected from a survey filled out by those Girls.  Every SUPERGirl provided us with her first Name, last Name, home Address, email, cell phone number, date of birth, race or ethnicity, age,current grade,the name of the school that she is currently attending, her preferred mentor, her professional interest or expertise, if she has or has not reliable transportation in case she needs to meet her mentor, if she had a mentoring role before, her language proficiency, her classification, her major/minor or certifications,  also, she answered many questions.</div>
+
+<div> Looking ahead, of interest in the first part of this project will be to apply data preparation to be ready for further analysis, then to apply some EDA, to get all the information about our variable of interest, in addition to visualizing the data.</div>
+
+<br>
+
+Here is a glimpse of what we will be working with. </div>
+
+
+```{r , message=FALSE,echo=TRUE}
+dataset<- readr::read_csv("SGSF_Mentor_Mentee_Matching_For2022-10-27_13_05_29.csv")
+head(dataset)
+```
+The columns names need to be fixed. Those are the new column names.
+```{r , message=FALSE,echo=TRUE}
+data<-dataset[4:23]
+##Fixing the colnames
+names(data)[2] <- 'School Name'
+names(data)[6] <- 'Current Grade'
+names(data)[7] <- 'Reliable Transportation'
+names(data)[8] <- 'Language Proficiencies'
+names(data)[9] <- 'Hobbies and Interests'
+names(data)[10] <- 'Personal Description'
+names(data)[11] <- 'Classification'
+names(data)[12] <- 'College Major/Minor/Certification'
+names(data)[13] <- 'Email'
+names(data)[14] <- 'Cell Number'
+names(data)[16] <- 'Desired mentor role'
+names(data)[17] <- 'Desired mentor impact area'
+names(data)[18] <- 'Previous mentorship'
+names(data)[19] <- 'Communication with Mentors preferences'
+names(data)[20] <- ' Mentors genders preferences'
+
+colnames(data)
+```
+<div> For the safety of the SUPERGirls we removed their names from the dataset, and also we picked our important features.</div>
+
+<div> The summary of this data shows that all the variables are characters except for the age variable which is numerical. The minimum girls age is 12 and the maximum is 23. 
+75% of the girls are aged 17 and above. </div>
+
+<div> We can also assume that this variable is normally distributed, since the median and the mean are almost equal.</div>
+
+```{r , message=FALSE,echo=TRUE}
+summary(data)
+```
+<div> After checking for missing values, we found that this dataset contains 71 missing values, so we replaced them with "NA". </div>
+
+```{r , message=FALSE,echo=TRUE}
+
+sum(is.na(data))
+
+data <- data %>% mutate_all(~ifelse(is.nan(.), NA, .))
+
+```
+<br>
+<br>
+
+##### <B> Race or Ethnicity variable</B>
+
+<div> Now, it is time for analyzing our variable of interest. The first variable that we will cover is Race or Ethnicity variable. We will get the frequency of each race or ethnicity in the dataset.</div>
+
+<div> We had to rename the "hispanic" to "Hispanic" race to get the count for it as one category </div>
+```{r , message=FALSE,echo=TRUE}
+library(tidyverse)
+library(plyr)
+library(RColorBrewer)
+library(plotly)
+data$`Race or Ethnicity`
+data$`Race or Ethnicity`[data$`Race or Ethnicity` == "hispanic"] <- "Hispanic"
+counts<-count(data$`Race or Ethnicity`)
+names(counts)[1] <- 'Race or Ethnicity'
+counts
+colourCount = length(unique(counts$`Race or Ethnicity`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p1<-ggplot(counts, aes(x=reorder(`Race or Ethnicity`, +freq), y=freq, fill=`Race or Ethnicity`,
+                       text=paste("Race or Ethnicity:",`Race or Ethnicity`,
+                                  "<br>Count:",freq
+                       )))+
+                    
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10))+
+  ggtitle("Race or Ethnicity distribution") +
+  theme_classic()+
+  theme(legend.position="none")+
+  labs(y="Counts",x="Race or Ethnicity", caption = "Source: Mentor Mentee match datasets") +
+  theme(title = element_text(size = 9, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        legend.position="none",
+        panel.grid.minor = element_blank())+
+  geom_text(aes(label = signif(freq)),position=position_dodge(0.9),vjust = -1, size=3)
+
+p1+scale_fill_manual(values = getPalette(colourCount))
+```
+
+<div> In order to make our visualization more active, we can use ggplotly function from plotly library.</div>
+
+```{r , message=FALSE,echo=TRUE}
+ggplotly(p1,tooltip="text")
+```
+
+<div> The above bar graph shows that the majority of the SGSF Girls are hispanic (11 girls), 2 girls are Asians, 2 are American-African, 1 girl is South_Indian, 1 is black. Also we can notice that a girl Wrote "Houston" as her race. </div>
+
+
+<br>
+<br>
+
+
+##### <B> School Name variable</B>
+For the school Name variable, we will get the name of the schools, colleges and universities where SUPERGirls study at, and then we will get the number of SUPERGirls in each school. 
+
+```{r , message=FALSE,echo=TRUE}
+data$`School Name`
+```
+<br>
+
+As we can see, "Kipp sunnyside" is wroted by the girls in many ways, we need it be written in the same way, so we can have under the same category while counting it.  
+
+```{r , message=FALSE,echo=TRUE}
+library(tidyverse)
+library(plyr)
+library(RColorBrewer)
+library(plotly)
+
+data$`School Name`
+data$`School Name`[data$`School Name` == "KIPP Sunnyside"] <- "Kipp Sunnyside"
+data$`School Name`[data$`School Name` == "kipp sunnyside"] <- "Kipp Sunnyside"
+data$`School Name`[data$`School Name` == "Kipp sunnyside"] <- "Kipp Sunnyside"
+data$`School Name`[data$`School Name` == "Kipp Sunnyside"] <- "Kipp Sunnyside"
+data$`School Name`[data$`School Name` == "Kipp Sunnnyside"] <- "Kipp Sunnyside"
+counts<-count(data$`School Name`)
+names(counts)[1] <- 'School Name'
+counts
+```
+
+<div> Now, we are able to visualize our countings  using the brewer palette from RColorBrewer library.</div>
+
+```{r , message=FALSE,echo=TRUE}
+colourCount = length(unique(counts$`School Name`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p2<-ggplot(counts, aes(x=reorder(`School Name`, +freq), y=freq, fill=`School Name`,
+                       text=paste("School Name:",`School Name`,
+                                  "<br>Count:",freq
+                       )))+
+  
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10))+
+  ggtitle("School Name distribution") +
+  theme_classic()+
+  theme(legend.position="none")+
+  coord_flip()+
+  labs(x="Counts",y="School Name", caption = "Source: Mentor Mentee match datasets") +
+  theme(title = element_text(size = 9, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        legend.position="none",
+        panel.grid.minor = element_blank())+
+  geom_text(aes(label = signif(freq)),position=position_dodge(0.9),vjust = -1, size=3)
+
+p2+scale_fill_manual(values = getPalette(colourCount))
+
+```
+
+<div> Based on the above bar plot, we can say that 10 girls out of 18 are studying in Kipp Sunnyside, and 4 girls have not mentioned their school names.</div>
+
+
+<br>
+<br>
+
+
+##### <B> Age variable</B>
+
+<div> The plot below marks the distribution of the SUUPERGirls Ages in the dataset. This plot verifies the previous assumptions that we take before, the majority of the girls (11 girls) are aged 17 years old, and 2 girls are aged 18 years old, the minimum age is 12 and the maximum is 23.</div>
+```{r , message=FALSE,echo=TRUE}
+counts1<-count(data$Age)
+names(counts1)[1] <- 'Age'
+colourCount = length(unique(counts1$Age))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Set3"))
+p3<-ggplot(counts1, aes(x=reorder(Age, +freq), y=freq, fill=factor(Age),
+                        text=paste("Age:",Age,
+                                   "<br>Count:",freq
+                        )))+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10))+
+  ggtitle("Age distribution") +
+  theme(legend.position="none")+
+  theme_classic()  +
+  labs(y="Counts",x="Age", caption = "Source: Mentor Mentee match datasets") +
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        legend.position="none",
+        panel.grid.minor = element_blank())+
+  geom_text(aes(label = signif(freq)),position=position_dodge(0.9),vjust = -1, size=3)
+
+p3+scale_fill_manual(values = getPalette(colourCount))
+```
+
+<br>
+<br>
+
+##### <B> Current Grade variable</B>
+
+In this part, we want to check the in which grade the majority of the girls are. 
+
+```{r , message=FALSE,echo=TRUE}
+counts2<-count(data$`Current Grade` )
+names(counts2)[1] <- 'Current Grade'
+colourCount = length(unique(counts2$`Current Grade` ))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Set3"))
+p4<-ggplot(counts2, aes(x=reorder(`Current Grade`, +freq), y=freq, fill=factor(`Current Grade`),
+                        text=paste("Current Grade:",`Current Grade`,
+                                   "<br>Count:",freq
+                        )))+
+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10,12))+
+  ggtitle("Grade distribution") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Grade", caption = "Source: Mentor Mentee match datasets") +
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        axis.text.y = element_blank(),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())+
+  geom_text(aes(label = signif(freq)),position=position_dodge(0.9),vjust = -1, size=3)
+
+
+p4+scale_fill_manual(values = getPalette(colourCount))
+```
+
+<div> It's clearly seen that 15 girls are in 12th grade. which is weird, since we saw in the school name plot we have girls in universities. their answer should be undergraduate ir graduate. We looked back in our survey and we noticed that we missed these 2 options that's why the girls chose the 12th grade as the highest level in the options. The mistake is corrected for further usage.</div> 
+
+
+<br>
+<br>
+
+
+##### <B> Reliable Transportation variable</B>
+<div> Our interest in here is to know if the SUPERGirls have a reliable transportation if they need to meet their mentors, if not, the SGSF will provide that. </div>
+
+```{r , message=FALSE,echo=TRUE}
+counts3<-count(data$`Reliable Transportation`)
+names(counts3)[1] <- 'Reliable Transportation'
+counts3
+colourCount = length(unique(counts3$`Reliable Transportation`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p5<-ggplot(counts3, aes(x=reorder(`Reliable Transportation`, +freq), y=freq, fill=factor(`Reliable Transportation`),
+                        text=paste("Reliable Transportation:",`Reliable Transportation`,
+                                   "<br>Count:",freq
+                        )))+
+  
+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10,12))+
+  ggtitle("Reliable Transportation") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Reliable transporation", caption = "Source: Mentor Mentee match datasets") +
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        axis.text.y = element_blank(),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())+
+  geom_text(aes(label = signif(freq)), vjust = -0.5, size=3)
+
+p5+scale_fill_manual(values = getPalette(colourCount))
+```
+
+We don't have any girl that answered no, which is what we hope for. 
+
+
+<br>
+<br>
+
+
+##### <B> Language proficiency variable</B>
+
+```{r , message=FALSE,echo=TRUE}
+data$`Language Proficiencies`
+```
+As we can see, while examining the data for this variable the "English" language is written by the girls in many ways, this will consider each way as a category, which is not correct. Lets fix those and create one "English" category, and the same for the other languages.
+
+```{r , message=FALSE,echo=TRUE}
+data$`Language Proficiencies`[data$`Language Proficiencies`=='english']<-"English"
+data$`Language Proficiencies`[data$`Language Proficiencies`=='english and spanish']<-"Spanish and English"
+data$`Language Proficiencies`[data$`Language Proficiencies`=='English and Spanish']<-"Spanish and English"
+data$`Language Proficiencies`[data$`Language Proficiencies`=='English , Spanish']<-"Spanish and English"
+data$`Language Proficiencies`[data$`Language Proficiencies`=='Spanish,']<-"Spanish"
+data$`Language Proficiencies`
+```
+Now, our variable is ready for checking the distribution on a bar plot.
+
+```{r , message=FALSE,echo=TRUE}
+counts4=count(data$`Language Proficiencies`)
+names(counts4)[1] <- 'Language Proficiencies'
+# Language proficencies variable plot
+colourCount = length(unique(counts4$`Language Proficiencies`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p6<-ggplot(counts4, aes(x=reorder(`Language Proficiencies`, +freq), y=freq, fill=factor(`Language Proficiencies`),
+                        text=paste("Language Proficiencies:",`Language Proficiencies`,
+                                   "<br>Count:",freq
+                        )))+
+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10,12))+
+  ggtitle("Language Proficiencies") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Language Proficiencies", caption = "Source: Mentor Mentee match datasets") +
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        axis.text.y = element_blank(),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank())+
+  geom_text(aes(label = signif(freq)), vjust = -0.5, size=3)
+
+p6+scale_fill_manual(values = getPalette(colourCount))
+```
+<div> The plot illustrates that 8 girls speaks English, 7 speaks english and spanish. that means all those who speaks english are speaking spanish too except for 1 girl out of these 8 who speaks english. Also, we have 1 girl that speaks only spanish, 1 girls speaks english and a little spanish, and 1 girls did not answer this question. </div>
+
+
+<br>
+<br>
+
+
+##### <B> Hobbies and Interests variable</B>
+
+<div> In the following part, we want to create a gt table using the gt library to show all the exact answers of the girls selected from the hobbies options provided to them in the survey, and check if 2 girls have the exact same hobbies and interests. </div>
+
+```{r , message=FALSE,echo=TRUE}
+library(gt)
+
+data1<-count(data$`Hobbies and Interests`)
+
+Interests<-data1%>% as.data.frame()%>%
+  gt()%>%
+  tab_header(title =md("**SUPERGirls Interest**") ) %>%
+  cols_label(x = "Interests",freq='Frequency') %>%
+  tab_source_note(source_note = md("**Source: Mentor/Mentee Matching Dataset**"))%>%
+  
+  
+  tab_style(
+    style=cell_text(font  = "calibri",
+                    align = "center",
+                    size=3),
+    locations=cells_body(columns =c(x,freq)
+    ))%>%
+    
+    
+  
+  tab_style(
+    style = list(
+      cell_borders(
+        sides = "bottom",
+        color = "black",
+        weight = px(3)
+      )
+    ),
+    locations = list(
+      cells_column_labels(
+        columns = gt::everything()
+      )
+    )
+  ) %>%
+  
+  tab_style(
+    style = list(
+      cell_text(font = "Karla", weight = "bold", align = "center", size=6)
+    ),
+    locations = list(
+      cells_column_labels(gt::everything())
+    )
+  ) %>%
+  
+  tab_options(
+    table.border.top.color = "black",
+    table.border.bottom.color = "black",
+    heading.border.bottom.color = "black",
+    table_body.border.top.color = "black",
+    column_labels.border.bottom.color = "white",
+    table_body.hlines.color = "white",
+    table_body.border.bottom.color = "black",
+    row.striping.background_color = "black")
+Interests
+```
+
+
+<br>
+
+<div>We can see that we don't have 2 girls that have exactly all the same interest but we do have girls that have common interest.
+
+
+<br>
+<br>
+
+
+##### <B>Personnel description variable</B>
+Again, we will present the girls personnel description in a gt table.
+
+```{r , message=FALSE,echo=TRUE}
+
+data2<-count(data$`Personal Description`)
+
+Personal_Description <-data2%>% as.data.frame()%>%
+  gt()%>%
+  tab_header(title =md("**SUPERGirls Personal Description**") ) %>%
+  cols_label(x = "Personal Description",freq='Frequency') %>%
+  tab_source_note(source_note = md("**Source: Mentor/Mentee Matching Dataset**"))%>%
+  
+  
+  tab_style(
+    style=cell_text(font  = "calibri",
+                    align = "center"),
+    locations=cells_body(columns =c(x,freq)
+    ))%>%
+  
+  
+  
+  tab_style(
+    style = list(
+      cell_borders(
+        sides = "bottom",
+        color = "black",
+        weight = px(3)
+      )
+    ),
+    locations = list(
+      cells_column_labels(
+        columns = gt::everything()
+      )
+    )
+  ) %>%
+  
+  tab_style(
+    style = list(
+      cell_text(font = "Karla", weight = "bold", align = "center")
+    ),
+    locations = list(
+      cells_column_labels(gt::everything())
+    )
+  ) %>%
+  
+  tab_options(
+    table.border.top.color = "black",
+    table.border.bottom.color = "black",
+    heading.border.bottom.color = "black",
+    table_body.border.top.color = "black",
+    column_labels.border.bottom.color = "white",
+    table_body.hlines.color = "white",
+    table_body.border.bottom.color = "black",
+    row.striping.background_color = "black")
+Personal_Description
+```
+<br>
+
+<div> The table represents all the answers of the girls regarding their personal description from the options provided in the survey. Again, we don't have 2 girls that described themselves in the same way.</div>
+
+
+<br>
+<br>
+
+
+##### <B> Professional Interest or Expertise variable</B>
+```{r , message=FALSE,echo=TRUE}
+counts5<-count(data$`Professional Interest or Expertise`)%>% as.data.frame()
+names(counts5)[1] <- 'Professional Interest or Expertise'
+colourCount = length(unique(counts5$`Professional Interest or Expertise`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p7<-ggplot(counts5, aes(x=reorder(`Professional Interest or Expertise`, +freq), y=freq, fill=factor(`Professional Interest or Expertise`),
+                        ))+
+  geom_bar(stat = 'identity',width = 0.6)+
+  ggtitle("SUPERGirls Professional Interest or Expertise") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Professional Interest or Expertise", caption = "Source: Mentor Mentee match datasets") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2))+
+  theme_bw()+
+  coord_flip()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"),
+        axis.text.y  = element_text(size = 5),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        )+
+  geom_text(aes(label = signif(freq)), vjust = -0.5, size=3)
+
+p7+scale_fill_manual(values = getPalette(colourCount))
+
+```
+<div> The plot marks that 7 girls have professional interest or expertise in the health care and medical field, and the other girls have group of interest at the same time.</div>
+
+<div> In order to have deeper understanding for these interests, we want to breakdown these answers  and get each interest using str_count function and count the girls that have this interest.</div>
+
+```{r , message=FALSE,echo=TRUE}
+Professional_Interest <- data.frame(Interest = c('Arts and Entertainment', 'Business and Development', 'Education', 'Cyber security', 'Computer Science', 'Engineering','Financial Services','Marketing and Advertising','Science and Math','Science and Technology','Information Technology','Health Care and Medicine','Ultrasound technician','Environmental Science','Financial Services','Biomedical Sciences','Aerospace,STEM'),
+                          counting = c(sum(str_count(data$`Professional Interest or Expertise` , regex("\\bArts and Entertainment\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bBusiness and Development\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bEducation\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise`, regex("\\bCyber security\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bComputer Science\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bEngineering\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise`, regex("\\bFinancial Services\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bMarketing and Advertising\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bScience and Math\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bScience and Technology\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bInformation Technology\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bHealth Care and Medicine\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bUltrasound technician\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bEnvironmental Science\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bFinancial Services\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bBiomedical Sciences\\b", uword = T))),
+                                       sum(str_count(data$`Professional Interest or Expertise` , regex("\\bAerospace\\b", uword = T)))
+                                       )
+                          )
+
+Professional_Interest
+```
+Now, we can visualize this variable.
+
+```{r , message=FALSE,echo=TRUE}
+Professional_Interest<- head(Professional_Interest[order(Professional_Interest$counting
+                            , decreasing = TRUE), ] ,5)
+
+colourCount = 5
+
+getPalette = colorRampPalette(brewer.pal(colourCount, "Set3"))
+p8<-ggplot(Professional_Interest, aes(x=reorder(Interest, +counting), y=counting, fill=factor(Interest),
+))+
+  geom_bar(stat = 'identity',width = 0.4)+
+  scale_y_continuous(limits = c(0,  15))+
+  ggtitle("SUPERGirls Professional Interest") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Interest", caption = "Source: Mentor Mentee match datasets") +
+  coord_flip()+
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"),
+        axis.text.y  = element_text(size = 5),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+  )+
+
+  geom_text(aes(label = signif(counting)), vjust = -0.5, size=3)
+
+p8+scale_fill_manual(values = getPalette(colourCount))
+```
+<div> After breaking down the answers, the counting has changed. 12 girls are interested in healthcare and medicine, 6 are interested in Engineering , 5 in technology, 5 in business and development and 4 in cyber security.</div> 
+
+
+<br>
+<br>
+
+
+##### <B> Desired Mentor role Variable</B>
+
+For this variable, we will do the same, we need to breakdown and get an overview of the desired mentor role that girls prefer, in order to choose the right mentors for them.
+```{r , message=FALSE,echo=TRUE}
+counts6 <-count(data$`Desired mentor role`)%>% as.data.frame()
+names(counts6)[1] <- 'Desired mentor role'
+counts6
+# Professional Interest or Expertise variable plot
+colourCount = length(unique(counts6$`Desired mentor role` ))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p9<-ggplot(counts6, aes(x=reorder(`Desired mentor role` , +freq), y=freq, fill=factor(`Desired mentor role`),
+))+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(1,2))+
+  ggtitle("SUPERGirls desired mentor role") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Desired mentor role", caption = "Source: Mentor Mentee match datasets") +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2))+
+  theme_bw()+
+  coord_flip()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"),
+        axis.text.y  = element_text(size = 5),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+  )+
+  geom_text(aes(label = signif(freq)), vjust = -0.5, size=3)
+
+p9+scale_fill_manual(values = getPalette(colourCount))
+
+```
+
+```{r, message=FALSE,echo=TRUE}
+Mentor_role <- data.frame(role = c('Colleague', 'Listener', 'Life Coach', 'Teacher', 'Industry Coach', 'Motivator','Ally','Nurturer','Career Development'),
+                          counting = c(sum(str_count(data$`Desired mentor role` , regex("\\bColleague\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bListener\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bLife Coach\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bTeacher\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bIndustry Coach\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bMotivator\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bAlly\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bNurturer\\b", uword = T))),
+                                       sum(str_count(data$`Desired mentor role` , regex("\\bCareer Development\\b", uword = T)))
+                                       
+                                       ))
+                                       
+                      
+colourCount = length(unique(Mentor_role$role ))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p10<-ggplot(Mentor_role , aes(x=reorder(role, +counting), y=counting, fill=factor(role),
+))+
+  geom_bar(stat = 'identity',width = 0.4)+
+  scale_y_continuous(breaks=c(0,5,10))+
+  ggtitle("SUPERGirls desired mentor role") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Mentor role", caption = "Source: Mentor Mentee match datasets") +
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"),
+        axis.text.y  = element_text(size = 5),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+  )+
+  geom_text(aes(label = signif(counting)), vjust = -0.5, size=3)
+
+p10+scale_fill_manual(values = getPalette(colourCount))
+
+
+   
+```
+<div> Now, we can make an assumption that the majority of the girls needs their mentor to be a career development, a motivator and a listener in the first place.</div>
+
+
+<br>
+<br>
+
+##### <B> Mentors genders preferences</B>
+
+<div> The SUPERGirls SHINE Foundation is concerned about the Girls interests to match them with the right mentors. lets see what is the mentor gender preference for these girls.</div>
+
+```{r,message=FALSE,echo=TRUE}
+counts8<-count(data$` Mentors genders preferences`)%>%as.data.frame()
+names(counts8)[1] <- 'Mentors genders '
+colourCount = length(unique(counts8$`Mentors genders `))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Set3"))
+p11<-ggplot(counts8, aes(x=reorder(`Mentors genders `, +freq), y=freq, fill=`Mentors genders `,
+                        text=paste("Mentors gender preference:",`Mentors genders `,
+                                   "<br>Count:",freq
+                        )))+
+
+  geom_bar(stat = 'identity',width = 0.6)+
+  scale_y_continuous(breaks=c(0,2,4,6,8,10))+
+  ggtitle("Mentors genders preferences") +
+  theme_classic()+
+  theme(legend.position="none")+
+  labs(y="Counts",x="Mentors genders preferences", caption = "Source: Mentor Mentee match datasets") +
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        legend.position="none",
+        panel.grid.minor = element_blank())
+
+p11+scale_fill_manual(values = getPalette(colourCount))
+```
+</div> Our observation to the plot shown about above is that 10 girls don't have a mentor gender preferences, however, 8 girls wanted them to be females. So, it's better for the SGSF to have female mentors for the girls</div>
+
+
+<br>
+<br>
+
+##### <B> Previous Mentorship variable</B>
+
+The SGSF wants to check if any girl had played a mentorship role before. the Graph below shows that no girl had this role before.
+
+``````{r,message=FALSE,echo=TRUE}
+
+counts9<-count(data$`Previous mentorship`)%>%as.data.frame()
+names(counts9)[1] <- 'Previous mentorship'
+colourCount = length(unique(data$`Previous mentorship`))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Set3"))
+p12<-ggplot(counts9, aes(x=reorder(`Previous mentorship`, +freq), y=freq, fill=`Previous mentorship`,
+                        text=paste("Previous mentorship:",`Previous mentorship`,
+                                   "<br>Count:",freq
+                        )))+
+  
+  geom_bar(stat = 'identity',width = 0.6)+
+  ggtitle("Previous Mentorship") +
+  theme_classic()+
+  theme(legend.position="none")+
+  labs(y="Counts",x="Mentors genders preferences", caption = "Source: Mentor Mentee match datasets") +
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"), 
+        legend.position="none",
+        panel.grid.minor = element_blank())
+
+p12+scale_fill_manual(values = getPalette(colourCount))
+
+```
+
+
+<br>
+<br>
+
+##### <B> Communication with mentors preferences variable</B>
+
+<div> In the survey, we provided the girls with 'email', 'text', 'phone', 'personal', 'Teams','chat' as communication options with their mentors. Each girl had many preference at the same time, we need to break down again each answer to get the individual options and get their occurence to know how many girls chose a particular option. This will be done using str_count function.</div>
+
+```{r,message=FALSE,echo=TRUE}
+
+Communication_with_Mentors_preferences <- data.frame(Tool = c('email', 'text', 'phone', 'personal', 'Teams','chat'),
+                                    counting = c(sum(str_count(data$`Communication with Mentors preferences` , regex("\\bemail\\b", uword = T))),
+                                                 sum(str_count(data$`Communication with Mentors preferences` , regex("\\btext\\b", uword = T))),
+                                                 sum(str_count(data$`Communication with Mentors preferences`, regex("\\bphone\\b", uword = T))),
+                                                 sum(str_count(data$`Communication with Mentors preferences`, regex("\\bpersonal\\b", uword = T))),
+                                                 sum(str_count(data$`Communication with Mentors preferences`, regex("\\bTeams\\b", uword = T))),
+                                                 sum(str_count(data$`Communication with Mentors preferences`, regex("\\bchat\\b", uword = T)))
+                                    )
+)
+colourCount = length(unique(Communication_with_Mentors_preferences$Tool ))
+getPalette = colorRampPalette(brewer.pal(colourCount, "Paired"))
+p13<-ggplot(Communication_with_Mentors_preferences , aes(x=reorder(Tool, +counting), y=counting, fill=factor(Tool),
+))+
+  geom_bar(stat = 'identity',width = 0.4)+
+  scale_y_continuous(breaks=c(0,5,10))+
+  ggtitle("SUPERGirls desired mentor communication") +
+  theme(legend.position="none")+
+  labs(y="Counts",x="Communication Form", caption = "Source: Mentor Mentee match datasets") +
+  theme_bw()+
+  theme(title = element_text(size = 10, face = "bold"), 
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_text(size = 8, face = "bold"),
+        axis.title.y = element_text(size = 8, face = "bold"),
+        axis.text.y  = element_text(size = 5),
+        legend.position="none",
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+  )+
+  geom_text(aes(label = signif(counting)), vjust = -0.5, size=3)
+
+p13+scale_fill_manual(values = getPalette(colourCount))
+
+```
+<div> Almost All the girls would like to communicate with their mentors via texts, 11 girls want in-person meetings, 10 wants to communicate via emails. only 5 prefer the chat form communication.</div>
+
+
+<br>
+<br>
+
+##### <B> Zip Codes and Home Addresses</B>
+ 
+In this part, we want to show how to extract the Zip codes out of the home Addresses and added to the dataset as an individual column using readlines and stri_extract_last_regex functions, and the library(stringi).
+
+```{r, message=TRUE,echo=FALSE}
+text <- readLines(textConnection(data$`Home Address`))
+
+library(stringi)
+data$zip <- stri_extract_last_regex(text, "\\d{5}")
+
+#replace NAs with NA
+data <- data %>% mutate_all(~ifelse(is.nan(.), NA, .))
+```
+
+
+<div> After that, we will distribute the girls according to their home addresses locations on a map using MapQuest that provides an R interface to interact with the MapQuest APIs after requesting an API key fo free, and then we will leaflet libraries, and the geocode_mapquest function to get the longitude and the latitude. </div>
+
+<div>We installed the development version from GitHub by running:</div>
+
+install.packages("remotes")
+remotes::install_github("chiouey/mapquestr")
+
+```{r,message=FALSE,echo=TRUE}
+
+locations = c('18003 Oak Cottage Court, Richmond, TX 77407, United States',
+              '13130 Fry Rd, Cypress, TX 77433, United States', 
+              '7214 Calais Rd,Houston, TX 77033, United States',
+              '2846 Tidewater Dr,Houston, TX 77045, United States',
+              '5934 Berkridge Houston, TX 77053, United States',
+              '8008 Lawler St, Houston, TX 77051, United States',
+              '3819 knotty Oaks Trl Houston, TX 77045, United States',
+              '5722 Southwind St, Houston, TX 77033, United States',
+              '5802 Southlea St, Houston Tx 77033, United States',
+              '5926 Ludington Dr, Houston, TX 77035, United States',
+              '5635 Southbrook Dr, Houston, TX 77033, United States',
+              '4344 Idaho St, Houston, TX 77021, United States',
+              '11318 Gladewater Dr, Pearland, TX 77584, United States',
+              '4314 White River Dr, Pasadena, TX 77504, United States',
+              '124 Palmyra St, Houston, Tx 77022, United States',
+              '2345 Sage Rd, Houston, TX 77065, United States')
+
+geocode<-geocode_mapquest(locations,key="IJ3cr7YdAxOu9AN9De4FU42WNSVXYPAQ")%>% as.data.frame()
+
+
+m <- leaflet() %>%
+  addTiles() %>%  # Add default OpenStreetMap map tiles
+  addMarkers(lng= geocode$lon, lat=geocode$lat)
+m
+```
+
+
+
+
+
+
+
+
+
